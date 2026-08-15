@@ -6,18 +6,34 @@ import requests
 import re
 
 # =========================================================
-# 📍 PAGE CONFIGURATION & STYLING
+# 📍 PAGE CONFIGURATION & STYLING (WITH BACKGROUND IMAGE)
 # =========================================================
 st.set_page_config(page_title="🏏 Cricket Analytics Hub", layout="wide")
 
 st.markdown("""
     <style>
-        .main { background-color: #0b0f19; color: #ffffff; }
+        /* Main page background image with dark overlay */
+        .stApp {
+            background: linear-gradient(rgba(11, 15, 25, 0.85), rgba(11, 15, 25, 0.90)), 
+                        url("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            color: #ffffff;
+        }
+
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background-color: rgba(15, 23, 42, 0.95);
+        }
+
+        /* Card and metric container styling */
         .stMetric {
-            background-color: #161f30;
+            background-color: rgba(22, 31, 48, 0.85);
             padding: 12px;
             border-radius: 10px;
-            border: 1px solid #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
         }
     </style>
 """, unsafe_allow_html=True)
@@ -114,7 +130,7 @@ def generate_over_progression(runs, overs):
     return overs_list, cumulative_runs
 
 # =========================================================
-# 📍 FULL HISTORICAL MATCH DATABASE (ALL 7 MATCHES RESTORED)
+# 📍 HISTORICAL MATCH DATABASE
 # =========================================================
 HISTORIC_DATABASE = {
     "🔴 Live Match: Sri Lanka vs India (1st Test - Galle)": {
