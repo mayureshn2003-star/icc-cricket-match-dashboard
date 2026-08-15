@@ -127,14 +127,13 @@ def generate_over_progression(runs, overs):
     return overs_list, cumulative_runs
 
 def build_dynamic_player_df(t1_name, r1, w1):
-    # Generates active scorecard ensuring accurate wicket counts and non-empty rows
-    b1_runs = max(int(r1 * 0.55), 1)
-    b2_runs = max(int(r1 * 0.35), 1)
+    b1_runs = max(int(r1 * 0.35), 1)
+    b2_runs = max(int(r1 * 0.55), 1)
     
     players = [f"{t1_name} Opener 1", f"{t1_name} Opener 2"]
     statuses = ["Batting*", "Batting*"]
     runs = [b1_runs, b2_runs]
-    balls = [max(int(b1_runs * 1.2), 1), max(int(b2_runs * 1.1), 1)]
+    balls = [max(int(b1_runs * 1.8), 1), max(int(b2_runs * 1.5), 1)]
     srs = [round((r / b) * 100, 2) if b > 0 else 0.0 for r, b in zip(runs, balls)]
 
     if w1 > 0:
@@ -142,7 +141,7 @@ def build_dynamic_player_df(t1_name, r1, w1):
         statuses.insert(0, "c Fielder b Bowler")
         out_runs = max(int(r1 * 0.1), 1)
         runs.insert(0, out_runs)
-        balls.insert(0, max(int(out_runs * 1.3), 1))
+        balls.insert(0, max(int(out_runs * 1.15), 1))
         srs.insert(0, round((runs[0] / balls[0]) * 100, 2))
 
     return pd.DataFrame({
@@ -278,7 +277,6 @@ def render_live_dashboard():
             r1, w1, o1 = parse_score_str(t1s)
             r2, w2, o2 = parse_score_str(t2s)
             
-            # Ensure exact wicket count if fallback string format was inaccurate
             w1 = 1 if w1 == 2 and "197/1" in t1s else w1
 
             selected_data = {
@@ -298,7 +296,7 @@ def render_live_dashboard():
                 "t1_runs": 197, "t1_wkts": 1, "t1_overs": 54.0,
                 "t2_runs": 0, "t2_wkts": 0, "t2_overs": 0.0,
                 "player_scores": pd.DataFrame({
-                    "Player Name 🏏": ["Yashasvi Jaiswal", "KL Rahul", "Devdutt Padikkal"],
+                    "Player Name 🏏": ["Yashasvi Jaiswal", "Devdutt Padikkal", "KL Rahul"],
                     "Status ⚾": ["c & b Fernando", "Batting*", "Batting*"],
                     "Runs 📊": [32, 88, 72],
                     "Balls ⏱️": [37, 155, 130],
