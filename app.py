@@ -6,7 +6,7 @@ import requests
 import re
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Official ICC Tournaments Dashboard", layout="wide")
+st.set_page_config(page_title="BCCI & International Cricket Dashboard", layout="wide")
 
 # Custom Dark Theme Styling
 st.markdown("""
@@ -24,36 +24,27 @@ st.markdown("""
 API_KEY = "711705be-d176-4692-969d-8d6cc93b4e4b"
 
 # =========================================================
-# 📍 STRICT ICC FILTERING & API PARSERS
+# 📍 EXPANDED MATCH FILTERING (IPL, BCCI, TEST, ODI, T20I)
 # =========================================================
-ICC_KEYWORDS = [
-    "icc", "world cup", "champions trophy", "world test championship", "wtc", 
-    "t20 world cup", "u19 world cup", "world cup qualifier"
+MATCH_KEYWORDS = [
+    "ipl", "indian premier league", "t20", "t20i", "odi", "test", 
+    "india", "bcci", "world cup", "champions trophy", "wtc", "u19",
+    "ranji", "dpl", "bbl", "psl", "cpl", "super smash"
 ]
 
-EXCLUDE_LEAGUES = [
-    "ipl", "dpl", "bbl", "psl", "cpl", "the hundred", "sa20", "ilt20", 
-    "ranji", "vitality blast", "super smash", "tnpl"
-]
-
-def filter_only_icc_matches(match_list):
-    """Strictly keeps matches matching ICC tournament keywords while filtering domestic leagues."""
-    filtered_icc = []
+def filter_all_matches(match_list):
+    """Filters live API matches to include IPL, BCCI domestic, and all international formats."""
+    filtered_matches = []
     for m in match_list:
         match_name = str(m.get("name", "")).lower()
         match_type = str(m.get("matchType", "")).lower()
         match_status = str(m.get("status", "")).lower()
         full_text = f"{match_name} {match_type} {match_status}"
         
-        # Check if match contains excluded league terms
-        if any(ex in full_text for ex in EXCLUDE_LEAGUES):
-            continue
+        if any(kw in full_text for kw in MATCH_KEYWORDS):
+            filtered_matches.append(m)
             
-        # Check if match belongs to official ICC events
-        if any(kw in full_text for kw in ICC_KEYWORDS):
-            filtered_icc.append(m)
-            
-    return filtered_icc
+    return filtered_matches if filtered_matches else match_list
 
 def fetch_live_matches():
     """Fetches active matches from CricAPI."""
@@ -93,9 +84,22 @@ def generate_over_progression(runs, overs):
     return overs_list, cumulative_runs
 
 # =========================================================
-# 📍 EXCLUSIVE HISTORICAL ICC MATCHES DATABASE
+# 📍 HISTORICAL MATCHES DATABASE
 # =========================================================
-HISTORIC_ICC_DATABASE = {
+HISTORIC_DATABASE = {
+    "🏆 IPL Final 2023: CSK vs GT": {
+        "t1": "Chennai Super Kings", "t2": "Gujarat Titans",
+        "t1s": "171/5 (15.0)", "t2s": "214/4 (20.0)",
+        "status": "CSK won by 5 wickets (DLS method)",
+        "t1_runs": 171, "t1_wkts": 5, "t1_overs": 15.0,
+        "t2_runs": 214, "t2_wkts": 4, "t2_overs": 20.0,
+        "partnerships": pd.DataFrame({
+            "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
+            "Batting Pair": ["R. Gaikwad & D. Conway", "S. Dube & A. Rayudu", "R. Jadeja & S. Dube"],
+            "Runs": [74, 32, 21],
+            "Balls": [39, 16, 12]
+        })
+    },
     "🏆 ICC T20 World Cup Final 2024: India vs South Africa": {
         "t1": "India", "t2": "South Africa",
         "t1s": "176/7 (20.0)", "t2s": "169/8 (20.0)",
@@ -121,50 +125,27 @@ HISTORIC_ICC_DATABASE = {
             "Runs": [192, 67, 30],
             "Balls": [166, 98, 26]
         })
-    },
-    "🏆 ICC World Test Championship Final 2023: Australia vs India": {
-        "t1": "Australia", "t2": "India",
-        "t1s": "469/10 & 270/8d", "t2s": "296/10 & 234/10",
-        "status": "Australia won by 209 runs",
-        "t1_runs": 469, "t1_wkts": 10, "t1_overs": 121.3,
-        "t2_runs": 296, "t2_wkts": 10, "t2_overs": 69.4,
-        "partnerships": pd.DataFrame({
-            "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
-            "Batting Pair": ["T. Head & S. Smith", "A. Rahane & S. Thakur", "R. Jadeja & A. Rahane"],
-            "Runs": [285, 109, 71],
-            "Balls": [362, 145, 100]
-        })
-    },
-    "🏆 ICC T20 World Cup Final 2022: England vs Pakistan": {
-        "t1": "England", "t2": "Pakistan",
-        "t1s": "138/5 (19.0)", "t2s": "137/8 (20.0)",
-        "status": "England won by 5 wickets",
-        "t1_runs": 138, "t1_wkts": 5, "t1_overs": 19.0,
-        "t2_runs": 137, "t2_wkts": 8, "t2_overs": 20.0,
-        "partnerships": pd.DataFrame({
-            "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
-            "Batting Pair": ["B. Stokes & H. Brook", "B. Stokes & M. Ali", "B. Azam & S. Masood"],
-            "Runs": [39, 47, 36],
-            "Balls": [42, 28, 24]
-        })
     }
 }
 
 # =========================================================
-# 📍 SIDEBAR CONTROLS & ICC NAVIGATION
+# 📍 SIDEBAR CONTROLS & NAVIGATION
 # =========================================================
-st.sidebar.title("🏆 ICC Tournament Center")
-match_source = st.sidebar.radio("Select Category", ["🔴 Live ICC Matches", "📜 ICC Tournament Records"])
+st.sidebar.title("🏏 Cricket Analytics Center")
+match_source = st.sidebar.radio("Select Category", ["🔴 Live Matches (IPL / INT)", "📜 Classic Match Records"])
 
 selected_data = None
 
 if "Live" in match_source:
     all_live = fetch_live_matches()
-    icc_live_matches = filter_only_icc_matches(all_live)
+    live_matches = filter_all_matches(all_live)
     
-    if icc_live_matches:
-        options = {f"{m.get('t1','Team A')} vs {m.get('t2','Team B')} ({m.get('ms','Live')})": m for m in icc_live_matches}
-        choice = st.sidebar.selectbox("Select Active ICC Match", list(options.keys()))
+    if live_matches:
+        options = {
+            f"{m.get('t1','Team A')} vs {m.get('t2','Team B')} ({str(m.get('matchType','')).upper()})": m 
+            for m in live_matches
+        }
+        choice = st.sidebar.selectbox("Select Active Match", list(options.keys()))
         api_match = options[choice]
         
         t1_name = api_match.get("t1", "Team A").split("[")[0].strip()
@@ -178,24 +159,24 @@ if "Live" in match_source:
         selected_data = {
             "t1": t1_name, "t2": t2_name,
             "t1s": t1s, "t2s": t2s,
-            "status": api_match.get("status", "Live ICC Match in Progress"),
+            "status": api_match.get("status", "Match in Progress"),
             "t1_runs": r1, "t1_wkts": w1, "t1_overs": o1,
             "t2_runs": r2, "t2_wkts": w2, "t2_overs": o2,
             "partnerships": pd.DataFrame({
                 "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
-                "Batting Pair": [f"{t1_name} Opener 1 & Opener 2", f"{t1_name} Batter 2 & Batter 3", f"{t1_name} Batter 3 & Batter 4"],
-                "Runs": [max(int(r1 * 0.45), 12), max(int(r1 * 0.30), 8), max(int(r1 * 0.15), 5)],
-                "Balls": [32, 22, 14]
+                "Batting Pair": [f"{t1_name} Batter 1 & 2", f"{t1_name} Batter 2 & 3", f"{t1_name} Batter 3 & 4"],
+                "Runs": [max(int(r1 * 0.45), 10), max(int(r1 * 0.30), 5), max(int(r1 * 0.15), 5)],
+                "Balls": [30, 20, 12]
             })
         }
-        st.sidebar.success("🟢 Connected: Rendering Live ICC Match")
+        st.sidebar.success("🟢 Live Match Feed Connected")
     else:
-        st.sidebar.info("No active live ICC matches currently playing. Showing ICC Tournament Records.")
-        match_source = "📜 ICC Tournament Records"
+        st.sidebar.info("No active matches currently live. Showing historic records.")
+        match_source = "📜 Classic Match Records"
 
 if "Records" in match_source or selected_data is None:
-    selected_key = st.sidebar.selectbox("Select Historic ICC Match Record", list(HISTORIC_ICC_DATABASE.keys()))
-    selected_data = HISTORIC_ICC_DATABASE[selected_key]
+    selected_key = st.sidebar.selectbox("Select Historic Match Record", list(HISTORIC_DATABASE.keys()))
+    selected_data = HISTORIC_DATABASE[selected_key]
 
 # =========================================================
 # 📍 SCOREBOARD & METRICS
@@ -211,7 +192,6 @@ o1 = max(float(selected_data.get("t1_overs", 0.0)), 0.0)
 r2 = max(int(selected_data.get("t2_runs", 0)), 0)
 o2 = max(float(selected_data.get("t2_overs", 0.0)), 0.0)
 
-# Set rendering fallback values if match hasn't started
 chart_r1 = r1 if r1 > 0 else 150
 chart_o1 = o1 if o1 > 0 else 20.0
 chart_r2 = r2 if r2 > 0 else 135
@@ -220,7 +200,7 @@ chart_o2 = o2 if o2 > 0 else 20.0
 crr1 = round(r1 / o1, 2) if o1 > 0 else 0.0
 crr2 = round(r2 / o2, 2) if o2 > 0 else 0.0
 
-st.title(f"🏆 ICC Event: {t1_name} vs {t2_name}")
+st.title(f"🏏 {t1_name} vs {t2_name}")
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(f"🛡️ {t1_name} Score", t1_score if t1_score else "Yet to bat")
@@ -228,7 +208,7 @@ col2.metric(f"⚔️ {t2_name} Score", t2_score if t2_score else "Yet to bat")
 col3.metric(f"{t1_name} CRR", f"{crr1}")
 col4.metric(f"{t2_name} CRR", f"{crr2}")
 
-st.info(f"**ICC Match Result / Status:** {status_msg}")
+st.info(f"**Match Status:** {status_msg}")
 st.divider()
 
 # =========================================================
@@ -252,7 +232,7 @@ df_icc = pd.DataFrame({
 left_col, right_col = st.columns(2)
 
 with left_col:
-    st.subheader("📈 Score Progression (Cumulative Runs)")
+    st.subheader("📈 Cumulative Run Progression")
     fig_prog = go.Figure()
     fig_prog.add_trace(go.Scatter(
         x=df_icc['Over'], 
@@ -306,18 +286,13 @@ with right_col:
     st.plotly_chart(fig_bar, use_container_width=True)
 
 # =========================================================
-# 📍 PLAYER PARTNERSHIPS & WICKET BREAKDOWN
+# 📍 PARTNERSHIPS & WICKET BREAKDOWN
 # =========================================================
 col_bottom1, col_bottom2 = st.columns(2)
 
 with col_bottom1:
-    st.subheader(f"👥 Key ICC Partnerships ({t1_name})")
-    partnerships_df = selected_data.get("partnerships", pd.DataFrame({
-        "Wicket": ["1st Wicket", "2nd Wicket"],
-        "Batting Pair": ["Player A & Player B", "Player B & Player C"],
-        "Runs": [50, 30],
-        "Balls": [35, 20]
-    }))
+    st.subheader(f"👥 Key Partnerships ({t1_name})")
+    partnerships_df = selected_data.get("partnerships", pd.DataFrame())
     st.dataframe(partnerships_df, use_container_width=True, hide_index=True)
 
 with col_bottom2:
