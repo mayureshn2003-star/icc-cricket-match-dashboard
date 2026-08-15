@@ -170,18 +170,18 @@ HISTORIC_DATABASE = {
             "SR ⚡": [193.47, 206.45, 236.36, 186.20, 172.22]
         })
     },
-    "🏆 IPL Final 2025: CSK vs KKR": {
-        "t1": "Chennai Super Kings", "t2": "Kolkata Knight Riders",
-        "t1s": "190/4 (19.1)", "t2s": "188/6 (20.0)",
-        "status": "CSK won by 6 wickets 🏆",
-        "t1_runs": 190, "t1_wkts": 4, "t1_overs": 19.1,
-        "t2_runs": 188, "t2_wkts": 6, "t2_overs": 20.0,
+    "🏆 IPL Final 2025: RCB vs PBKS": {
+        "t1": "Royal Challengers Bengaluru", "t2": "Punjab Kings",
+        "t1s": "190/9 (20.0)", "t2s": "184/7 (20.0)",
+        "status": "RCB won by 6 runs (Maiden IPL Title) 🏆",
+        "t1_runs": 190, "t1_wkts": 9, "t1_overs": 20.0,
+        "t2_runs": 184, "t2_wkts": 7, "t2_overs": 20.0,
         "player_scores": pd.DataFrame({
-            "Player Name 🏏": ["Ruturaj Gaikwad", "Shivam Dube", "Rinku Singh", "Sunil Narine", "MS Dhoni"],
-            "Status ⚾": ["c Iyer b Starc", "Not Out*", "Not Out*", "b Jadeja", "Did not bat"],
-            "Runs 📊": [71, 53, 44, 38, 0],
-            "Balls ⏱️": [44, 26, 21, 19, 0],
-            "SR ⚡": [161.36, 203.84, 209.52, 200.00, 0.00]
+            "Player Name 🏏": ["Virat Kohli", "Jitesh Sharma", "Shashank Singh", "Phil Salt", "Rajat Patidar"],
+            "Status ⚾": ["c & b Omarzai", "c Arshdeep b Harshal", "Not Out*", "c Jamieson b Omarzai", "c Chahal b Brar"],
+            "Runs 📊": [43, 24, 61, 16, 26],
+            "Balls ⏱️": [35, 10, 31, 9, 15],
+            "SR ⚡": [122.85, 240.00, 196.77, 177.77, 173.33]
         })
     },
     "🏆 WPL Final 2026: RCB vs DC": {
