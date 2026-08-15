@@ -24,7 +24,6 @@ st.markdown("""
 
 API_KEY = "711705be-d176-4692-969d-8d6cc93b4e4b"
 
-# Exclude foreign domestic & county leagues strictly
 EXCLUDE_LEAGUES = [
     "tnpl", "cpl", "bbl", "psl", "hundred", "sa20", "ilt20", 
     "vitality blast", "super smash", "county", "derbyshire", "durham", 
@@ -35,22 +34,18 @@ EXCLUDE_LEAGUES = [
 # 📍 API FETCHING & STRICT FILTERING LOGIC
 # =========================================================
 def fetch_live_matches():
-    """Fetches live score feeds and match schedules from CricAPI."""
     matches = []
-    
-    # Endpoint 1: Live Scores Feed
     try:
         url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
-        r1 = requests.get(url_score, timeout=5).json()
+        r1 = requests.get(url_score, timeout=3).json()
         if r1.get("status") == "success":
             matches.extend(r1.get("data", []))
     except Exception:
         pass
         
-    # Endpoint 2: Scheduled / Active Tournaments & Bilaterals
     try:
         url_matches = f"https://api.cricapi.com/v1/matches?apikey={API_KEY}&offset=0"
-        r2 = requests.get(url_matches, timeout=5).json()
+        r2 = requests.get(url_matches, timeout=3).json()
         if r2.get("status") == "success":
             for m in r2.get("data", []):
                 t1 = m.get("teams", ["Team A", "Team B"])[0] if len(m.get("teams", [])) > 0 else "Team A"
@@ -74,10 +69,8 @@ def fetch_live_matches():
     return matches
 
 def filter_india_and_ipl(match_list):
-    """Filters strictly for India International (Bilaterals/Warmups), IPL, WPL, WTC, and World Cups."""
     filtered = []
     seen = set()
-    
     for m in match_list:
         m_id = m.get("id", m.get("name"))
         if m_id in seen:
@@ -85,11 +78,9 @@ def filter_india_and_ipl(match_list):
             
         full_text = f"{m.get('name','')} {m.get('matchType','')} {m.get('status','')} {m.get('t1','')} {m.get('t2','')}".lower()
         
-        # 1. Skip foreign non-Indian domestic/county leagues
         if any(ex in full_text for ex in EXCLUDE_LEAGUES):
             continue
             
-        # 2. Check for Team India (Bilateral series, Warm-ups, Tests, ODIs, T20s)
         is_india = any(kw in full_text for kw in ["india", "ind ", "ind-a", "bcci", "sri lanka vs india", "india vs sri lanka"])
         is_ipl = "ipl" in full_text or "indian premier league" in full_text
         is_wpl = "wpl" in full_text or "women's premier league" in full_text
@@ -102,7 +93,6 @@ def filter_india_and_ipl(match_list):
     return filtered
 
 def parse_score_str(score_str):
-    """Parses runs, wickets, and overs metrics from score strings."""
     if not score_str or score_str == "Yet to bat":
         return 0, 0, 0.0
     match = re.search(r'(\d+)/(\d+)\s*\((\d+\.?\d*)\)', str(score_str))
@@ -114,7 +104,6 @@ def parse_score_str(score_str):
     return 0, 0, 0.0
 
 def generate_over_progression(runs, overs):
-    """Generates over-by-over progression curve."""
     total_overs = max(int(overs), 20) if overs > 0 else 20
     safe_runs = max(runs, 10)
     avg_per_over = safe_runs / total_overs
@@ -125,7 +114,7 @@ def generate_over_progression(runs, overs):
     return overs_list, cumulative_runs
 
 # =========================================================
-# 📍 HISTORICAL MATCH DATABASE (IPL FINALS & ICC FINALS)
+# 📍 HISTORICAL MATCH DATABASE
 # =========================================================
 HISTORIC_DATABASE = {
     "🔴 Live Match: Sri Lanka vs India (1st Test - Galle)": {
@@ -142,34 +131,6 @@ HISTORIC_DATABASE = {
             "SR ⚡": [69.30, 41.13, 86.49, 0.0, 0.0]
         })
     },
-    "🏆 IPL Final 2026: RCB vs GT": {
-        "t1": "Royal Challengers Bengaluru", "t2": "Gujarat Titans",
-        "t1s": "161/5 (18.0)", "t2s": "155/8 (20.0)",
-        "status": "RCB won by 5 wickets 🏆",
-        "t1_runs": 161, "t1_wkts": 5, "t1_overs": 18.0,
-        "t2_runs": 155, "t2_wkts": 8, "t2_overs": 20.0,
-        "player_scores": pd.DataFrame({
-            "Player Name 🏏": ["Virat Kohli", "Venkatesh Iyer", "Rajat Patidar", "Washington Sundar", "Shubman Gill"],
-            "Status ⚾": ["Not Out*", "c Rashid b Siraj", "b Shami", "Not Out*", "c Hazlewood b Bhuvi"],
-            "Runs 📊": [75, 62, 18, 50, 39],
-            "Balls ⏱️": [42, 27, 14, 28, 24],
-            "SR ⚡": [178.57, 229.62, 128.57, 178.57, 162.50]
-        })
-    },
-    "🏆 T20 World Cup Final 2026: India vs New Zealand": {
-        "t1": "India", "t2": "New Zealand",
-        "t1s": "255/5 (20.0)", "t2s": "159/10 (17.2)",
-        "status": "India won by 96 runs 🏆",
-        "t1_runs": 255, "t1_wkts": 5, "t1_overs": 20.0,
-        "t2_runs": 159, "t2_wkts": 10, "t2_overs": 17.2,
-        "player_scores": pd.DataFrame({
-            "Player Name 🏏": ["Sanju Samson", "Yashasvi Jaiswal", "Suryakumar Yadav", "Tim Seifert", "Glenn Phillips"],
-            "Status ⚾": ["c Santner b Boult", "c Phillips b Sodhi", "Not Out*", "c Axar b Bumrah", "b Kuldeep"],
-            "Runs 📊": [89, 64, 52, 54, 31],
-            "Balls ⏱️": [46, 31, 22, 29, 18],
-            "SR ⚡": [193.47, 206.45, 236.36, 186.20, 172.22]
-        })
-    },
     "🏆 IPL Final 2025: RCB vs PBKS": {
         "t1": "Royal Challengers Bengaluru", "t2": "Punjab Kings",
         "t1s": "190/9 (20.0)", "t2s": "184/7 (20.0)",
@@ -183,200 +144,151 @@ HISTORIC_DATABASE = {
             "Balls ⏱️": [35, 10, 31, 9, 15],
             "SR ⚡": [122.85, 240.00, 196.77, 177.77, 173.33]
         })
-    },
-    "🏆 WPL Final 2026: RCB vs DC": {
-        "t1": "Royal Challengers Bengaluru", "t2": "Delhi Capitals",
-        "t1s": "204/4 (19.4)", "t2s": "203/4 (20.0)",
-        "status": "RCB won by 6 wickets 🏆",
-        "t1_runs": 204, "t1_wkts": 4, "t1_overs": 19.4,
-        "t2_runs": 203, "t2_wkts": 4, "t2_overs": 20.0,
-        "player_scores": pd.DataFrame({
-            "Player Name 🏏": ["Smriti Mandhana", "Richa Ghosh", "Meg Lanning", "Shafali Verma", "Jemimah Rodrigues"],
-            "Status ⚾": ["c Lanning b Kapp", "Not Out*", "c Mandhana b Asha", "b Renuka", "Not Out*"],
-            "Runs 📊": [84, 45, 62, 41, 38],
-            "Balls ⏱️": [48, 22, 38, 20, 19],
-            "SR ⚡": [175.00, 204.54, 163.15, 205.00, 200.00]
-        })
-    },
-    "🏆 ICC T20 World Cup Final 2024: India vs South Africa": {
-        "t1": "India", "t2": "South Africa",
-        "t1s": "176/7 (20.0)", "t2s": "169/8 (20.0)",
-        "status": "India won by 7 runs 🏆",
-        "t1_runs": 176, "t1_wkts": 7, "t1_overs": 20.0,
-        "t2_runs": 169, "t2_wkts": 8, "t2_overs": 20.0,
-        "player_scores": pd.DataFrame({
-            "Player Name 🏏": ["Virat Kohli", "Axar Patel", "Heinrich Klaasen", "Quinton de Kock", "Hardik Pandya"],
-            "Status ⚾": ["c Rabada b Jansen", "run out (De Kock)", "c Pant b Hardik", "c Kuldeep b Arshdeep", "Not Out*"],
-            "Runs 📊": [76, 47, 52, 39, 5],
-            "Balls ⏱️": [59, 31, 27, 31, 2],
-            "SR ⚡": [128.81, 151.61, 192.59, 125.80, 250.00]
-        })
-    },
-    "🏆 ICC WTC Final 2025: India vs Australia": {
-        "t1": "Australia", "t2": "India",
-        "t1s": "380 & 210", "t2s": "290 & 280",
-        "status": "Australia won by 120 runs 🏆",
-        "t1_runs": 380, "t1_wkts": 10, "t1_overs": 102.0,
-        "t2_runs": 290, "t2_wkts": 10, "t2_overs": 88.0,
-        "player_scores": pd.DataFrame({
-            "Player Name 🏏": ["Steve Smith", "Travis Head", "Rohit Sharma", "Rishabh Pant", "Ravindra Jadeja"],
-            "Status ⚾": ["c Pant b Siraj", "c Kohli b Shami", "lbw b Starc", "c Carey b Lyon", "Not Out*"],
-            "Runs 📊": [121, 84, 43, 61, 48],
-            "Balls ⏱️": [210, 95, 68, 82, 90],
-            "SR ⚡": [57.61, 88.42, 63.23, 74.39, 53.33]
-        })
     }
 }
 
 # =========================================================
-# 📍 SIDEBAR CONTROLS & NAVIGATION
+# 📍 SIDEBAR NAVIGATION
 # =========================================================
 st.sidebar.title("🏏 Cricket Analytics Hub")
 st.sidebar.markdown("---")
 match_source = st.sidebar.radio("📌 Select Category", ["🔴 Live Matches (India / IPL / WPL / Bilateral)", "📜 Classic Match Records"])
 
-selected_data = None
-
-if "Live" in match_source:
-    raw_matches = fetch_live_matches()
-    filtered_matches = filter_india_and_ipl(raw_matches)
-    
-    if filtered_matches:
-        options = {
-            f"⚾ {m.get('t1','Team A')} vs {m.get('t2','Team B')} ({str(m.get('matchType','')).upper()})": m 
-            for m in filtered_matches
-        }
-        choice = st.sidebar.selectbox("🔥 Select Active Match", list(options.keys()))
-        api_match = options[choice]
-        
-        t1_name = str(api_match.get("t1", "Team A")).split("[")[0].strip()
-        t2_name = str(api_match.get("t2", "Team B")).split("[")[0].strip()
-        t1s = str(api_match.get("t1s", "0/0 (0)"))
-        t2s = str(api_match.get("t2s", "0/0 (0)"))
-        
-        r1, w1, o1 = parse_score_str(t1s)
-        r2, w2, o2 = parse_score_str(t2s)
-        
-        selected_data = {
-            "t1": t1_name, "t2": t2_name,
-            "t1s": t1s, "t2s": t2s,
-            "status": api_match.get("status", "Match Live"),
-            "t1_runs": r1, "t1_wkts": w1, "t1_overs": o1,
-            "t2_runs": r2, "t2_wkts": w2, "t2_overs": o2,
-            "player_scores": pd.DataFrame({
-                "Player Name 🏏": [f"{t1_name} Batter 1", f"{t1_name} Batter 2", f"{t1_name} Batter 3", f"{t1_name} Batter 4"],
-                "Status ⚾": ["Batting*", "Batting*", "Out", "Yet to bat"],
-                "Runs 📊": [max(int(r1 * 0.45), 10), max(int(r1 * 0.35), 5), max(int(r1 * 0.15), 2), 0],
-                "Balls ⏱️": [35, 25, 12, 0],
-                "SR ⚡": [128.5, 140.0, 125.0, 0.0]
-            })
-        }
-        st.sidebar.success("🟢 Live Feed Active")
-    else:
-        st.sidebar.info("Showing Sri Lanka vs India 1st Test (Live Data)")
-        selected_data = HISTORIC_DATABASE["🔴 Live Match: Sri Lanka vs India (1st Test - Galle)"]
-
-if selected_data is None:
+selected_key = None
+if "Live" not in match_source:
     selected_key = st.sidebar.selectbox("🏆 Select Historic Final Record", list(HISTORIC_DATABASE.keys()))
-    selected_data = HISTORIC_DATABASE[selected_key]
 
 # =========================================================
-# 📍 SCOREBOARD DISPLAY & METRICS
+# 📍 AUTO-REFRESHING LIVE DASHBOARD FRAGMENT ⚡
 # =========================================================
-t1_name = selected_data.get("t1", "Team A")
-t2_name = selected_data.get("t2", "Team B")
-t1_score = selected_data.get("t1s", "0/0 (0.0)")
-t2_score = selected_data.get("t2s", "0/0 (0.0)")
-status_msg = selected_data.get("status", "Match Completed")
+@st.fragment(run_every=3)
+def render_live_dashboard():
+    selected_data = None
 
-r1 = max(int(selected_data.get("t1_runs", 0)), 0)
-o1 = max(float(selected_data.get("t1_overs", 0.0)), 0.0)
-r2 = max(int(selected_data.get("t2_runs", 0)), 0)
-o2 = max(float(selected_data.get("t2_overs", 0.0)), 0.0)
+    if "Live" in match_source:
+        raw_matches = fetch_live_matches()
+        filtered_matches = filter_india_and_ipl(raw_matches)
+        
+        if filtered_matches:
+            api_match = filtered_matches[0]
+            t1_name = str(api_match.get("t1", "Team A")).split("[")[0].strip()
+            t2_name = str(api_match.get("t2", "Team B")).split("[")[0].strip()
+            t1s = str(api_match.get("t1s", "0/0 (0)"))
+            t2s = str(api_match.get("t2s", "0/0 (0)"))
+            
+            r1, w1, o1 = parse_score_str(t1s)
+            r2, w2, o2 = parse_score_str(t2s)
+            
+            selected_data = {
+                "t1": t1_name, "t2": t2_name,
+                "t1s": t1s, "t2s": t2s,
+                "status": api_match.get("status", "Match Live"),
+                "t1_runs": r1, "t1_wkts": w1, "t1_overs": o1,
+                "t2_runs": r2, "t2_wkts": w2, "t2_overs": o2,
+                "player_scores": pd.DataFrame({
+                    "Player Name 🏏": [f"{t1_name} Batter 1", f"{t1_name} Batter 2"],
+                    "Status ⚾": ["Batting*", "Batting*"],
+                    "Runs 📊": [max(int(r1 * 0.5), 1), max(int(r1 * 0.3), 1)],
+                    "Balls ⏱️": [35, 25],
+                    "SR ⚡": [128.5, 140.0]
+                })
+            }
+        else:
+            selected_data = HISTORIC_DATABASE["🔴 Live Match: Sri Lanka vs India (1st Test - Galle)"]
+    else:
+        selected_data = HISTORIC_DATABASE[selected_key]
 
-crr1 = round(r1 / o1, 2) if o1 > 0 else 0.0
-crr2 = round(r2 / o2, 2) if o2 > 0 else 0.0
+    t1_name = selected_data.get("t1", "Team A")
+    t2_name = selected_data.get("t2", "Team B")
+    t1_score = selected_data.get("t1s", "0/0 (0.0)")
+    t2_score = selected_data.get("t2s", "0/0 (0.0)")
+    status_msg = selected_data.get("status", "Match Completed")
 
-st.title(f"🏏 {t1_name} vs {t2_name} ⚾")
+    r1 = max(int(selected_data.get("t1_runs", 0)), 0)
+    o1 = max(float(selected_data.get("t1_overs", 0.0)), 0.0)
+    r2 = max(int(selected_data.get("t2_runs", 0)), 0)
+    o2 = max(float(selected_data.get("t2_overs", 0.0)), 0.0)
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric(f"🛡️ {t1_name}", t1_score if t1_score else "Yet to bat")
-col2.metric(f"⚔️ {t2_name}", t2_score if t2_score else "Yet to bat")
-col3.metric(f"⚡ {t1_name} CRR", f"{crr1}")
-col4.metric(f"⚡ {t2_name} CRR", f"{crr2}")
+    crr1 = round(r1 / o1, 2) if o1 > 0 else 0.0
+    crr2 = round(r2 / o2, 2) if o2 > 0 else 0.0
 
-st.info(f"📢 **Match Status:** {status_msg}")
-st.divider()
+    st.title(f"🏏 {t1_name} vs {t2_name} ⚾")
 
-# =========================================================
-# 📍 RUN PROGRESSION & MANHATTAN CHARTS
-# =========================================================
-chart_r1 = r1 if r1 > 0 else 170
-chart_o1 = o1 if o1 > 0 else 20.0
-chart_r2 = r2 if r2 > 0 else 150
-chart_o2 = o2 if o2 > 0 else 20.0
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric(f"🛡️ {t1_name}", t1_score if t1_score else "Yet to bat")
+    col2.metric(f"⚔️ {t2_name}", t2_score if t2_score else "Yet to bat")
+    col3.metric(f"⚡ {t1_name} CRR", f"{crr1}")
+    col4.metric(f"⚡ {t2_name} CRR", f"{crr2}")
 
-o1_list, p1 = generate_over_progression(chart_r1, chart_o1)
-o2_list, p2 = generate_over_progression(chart_r2, chart_o2)
+    st.info(f"📢 **Match Status:** {status_msg} | 🔄 Auto-updating every 3 sec")
+    st.divider()
 
-max_overs = max(len(o1_list), len(o2_list))
-all_overs = list(range(1, max_overs + 1))
+    chart_r1 = r1 if r1 > 0 else 170
+    chart_o1 = o1 if o1 > 0 else 20.0
+    chart_r2 = r2 if r2 > 0 else 150
+    chart_o2 = o2 if o2 > 0 else 20.0
 
-p1_padded = p1 + [chart_r1] * (max_overs - len(p1))
-p2_padded = p2 + [chart_r2] * (max_overs - len(p2))
+    o1_list, p1 = generate_over_progression(chart_r1, chart_o1)
+    o2_list, p2 = generate_over_progression(chart_r2, chart_o2)
 
-df_icc = pd.DataFrame({
-    "Over": all_overs,
-    f"{t1_name} Runs": p1_padded,
-    f"{t2_name} Runs": p2_padded
-})
+    max_overs = max(len(o1_list), len(o2_list))
+    all_overs = list(range(1, max_overs + 1))
 
-left_col, right_col = st.columns(2)
+    p1_padded = p1 + [chart_r1] * (max_overs - len(p1))
+    p2_padded = p2 + [chart_r2] * (max_overs - len(p2))
 
-with left_col:
-    st.subheader("📈 Cumulative Run Progression")
-    fig_prog = go.Figure()
-    fig_prog.add_trace(go.Scatter(
-        x=df_icc['Over'], y=df_icc[f"{t1_name} Runs"], 
-        mode='lines+markers', name=t1_name, line=dict(color='#00d2ff', width=3)
-    ))
-    fig_prog.add_trace(go.Scatter(
-        x=df_icc['Over'], y=df_icc[f"{t2_name} Runs"], 
-        mode='lines+markers', name=t2_name, line=dict(color='#ff4b4b', width=3)
-    ))
-    fig_prog.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs")
-    st.plotly_chart(fig_prog, use_container_width=True)
-
-with right_col:
-    st.subheader("📊 Manhattan Chart (Runs Per Over)")
-    df_icc[f"{t1_name} Per Over"] = df_icc[f"{t1_name} Runs"].diff().fillna(df_icc[f"{t1_name} Runs"].iloc[0])
-    df_icc[f"{t2_name} Per Over"] = df_icc[f"{t2_name} Runs"].diff().fillna(df_icc[f"{t2_name} Runs"].iloc[0])
-    
-    fig_bar = go.Figure()
-    fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t1_name} Per Over"], name=t1_name, marker_color='#00d2ff'))
-    fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t2_name} Per Over"], name=t2_name, marker_color='#ff4b4b'))
-    fig_bar.update_layout(barmode='group', template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs in Over")
-    st.plotly_chart(fig_bar, use_container_width=True)
-
-# =========================================================
-# 📍 PLAYER SCORES & WICKETS BREAKDOWN
-# =========================================================
-col_b1, col_b2 = st.columns(2)
-
-with col_b1:
-    st.subheader("👤 Batting Performance & Player Scores")
-    player_df = selected_data.get("player_scores", pd.DataFrame())
-    st.dataframe(player_df, use_container_width=True, hide_index=True)
-
-with col_b2:
-    st.subheader("🍩 Wickets Comparison")
-    w1 = selected_data.get("t1_wkts", 1)
-    w2 = selected_data.get("t2_wkts", 1)
-    
-    wicket_pie = pd.DataFrame({
-        "Team": [t1_name, t2_name],
-        "Wickets": [w1 if w1 > 0 else 1, w2 if w2 > 0 else 1]
+    df_icc = pd.DataFrame({
+        "Over": all_overs,
+        f"{t1_name} Runs": p1_padded,
+        f"{t2_name} Runs": p2_padded
     })
-    fig_donut = px.pie(wicket_pie, values='Wickets', names='Team', hole=0.5, template="plotly_dark", color_discrete_sequence=['#00d2ff', '#ff4b4b'])
-    fig_donut.update_layout(height=260, margin=dict(l=20, r=20, t=20, b=20))
-    st.plotly_chart(fig_donut, use_container_width=True)
+
+    left_col, right_col = st.columns(2)
+
+    with left_col:
+        st.subheader("📈 Cumulative Run Progression")
+        fig_prog = go.Figure()
+        fig_prog.add_trace(go.Scatter(
+            x=df_icc['Over'], y=df_icc[f"{t1_name} Runs"], 
+            mode='lines+markers', name=t1_name, line=dict(color='#00d2ff', width=3)
+        ))
+        fig_prog.add_trace(go.Scatter(
+            x=df_icc['Over'], y=df_icc[f"{t2_name} Runs"], 
+            mode='lines+markers', name=t2_name, line=dict(color='#ff4b4b', width=3)
+        ))
+        fig_prog.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs")
+        st.plotly_chart(fig_prog, use_container_width=True)
+
+    with right_col:
+        st.subheader("📊 Manhattan Chart (Runs Per Over)")
+        df_icc[f"{t1_name} Per Over"] = df_icc[f"{t1_name} Runs"].diff().fillna(df_icc[f"{t1_name} Runs"].iloc[0])
+        df_icc[f"{t2_name} Per Over"] = df_icc[f"{t2_name} Runs"].diff().fillna(df_icc[f"{t2_name} Runs"].iloc[0])
+        
+        fig_bar = go.Figure()
+        fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t1_name} Per Over"], name=t1_name, marker_color='#00d2ff'))
+        fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t2_name} Per Over"], name=t2_name, marker_color='#ff4b4b'))
+        fig_bar.update_layout(barmode='group', template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs in Over")
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    col_b1, col_b2 = st.columns(2)
+
+    with col_b1:
+        st.subheader("👤 Batting Performance & Player Scores")
+        player_df = selected_data.get("player_scores", pd.DataFrame())
+        st.dataframe(player_df, use_container_width=True, hide_index=True)
+
+    with col_b2:
+        st.subheader("🍩 Wickets Comparison")
+        w1 = selected_data.get("t1_wkts", 1)
+        w2 = selected_data.get("t2_wkts", 1)
+        
+        wicket_pie = pd.DataFrame({
+            "Team": [t1_name, t2_name],
+            "Wickets": [w1 if w1 > 0 else 1, w2 if w2 > 0 else 1]
+        })
+        fig_donut = px.pie(wicket_pie, values='Wickets', names='Team', hole=0.5, template="plotly_dark", color_discrete_sequence=['#00d2ff', '#ff4b4b'])
+        fig_donut.update_layout(height=260, margin=dict(l=20, r=20, t=20, b=20))
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+# Run auto-refreshing UI
+render_live_dashboard()
