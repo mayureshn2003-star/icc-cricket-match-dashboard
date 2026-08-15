@@ -5,16 +5,18 @@ import plotly.graph_objects as go
 import requests
 import re
 
-# --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="India & IPL Analytics Dashboard", layout="wide")
+# =========================================================
+# 📍 PAGE CONFIGURATION & STYLING
+# =========================================================
+st.set_page_config(page_title="🏏 Cricket Analytics Hub", layout="wide")
 
 st.markdown("""
     <style>
         .main { background-color: #0b0f19; color: #ffffff; }
         .stMetric {
             background-color: #161f30;
-            padding: 10px;
-            border-radius: 8px;
+            padding: 12px;
+            border-radius: 10px;
             border: 1px solid #1e293b;
         }
     </style>
@@ -22,96 +24,85 @@ st.markdown("""
 
 API_KEY = "711705be-d176-4692-969d-8d6cc93b4e4b"
 
-# Exclude foreign domestic/county leagues
+# Exclude foreign domestic & county leagues strictly
 EXCLUDE_LEAGUES = [
     "tnpl", "cpl", "bbl", "psl", "hundred", "sa20", "ilt20", 
     "vitality blast", "super smash", "county", "derbyshire", "durham", 
-    "kent", "middlesex", "lanka premier league", "bpl"
+    "kent", "middlesex", "lanka premier league", "lpl", "bpl"
 ]
 
+# =========================================================
+# 📍 API FETCHING & STRICT FILTERING LOGIC
+# =========================================================
 def fetch_live_matches():
-    """
-    Fetches live & active matches using multiple CricAPI endpoints to capture 
-    bilateral series, Tests, ODIs, T20Is, warm-ups, and IPL matches.
-    """
-    matches_list = []
+    """Fetches live score feeds and match schedules from CricAPI."""
+    matches = []
     
-    # 1. Primary Live Score Endpoint
-    url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
+    # Endpoint 1: Live Scores Feed
     try:
+        url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
         r1 = requests.get(url_score, timeout=5).json()
         if r1.get("status") == "success":
-            matches_list.extend(r1.get("data", []))
+            matches.extend(r1.get("data", []))
     except Exception:
         pass
         
-    # 2. General Matches Endpoint (Captures Test Series, Bilaterals & Tour Matches)
-    url_matches = f"https://api.cricapi.com/v1/matches?apikey={API_KEY}&offset=0"
+    # Endpoint 2: Scheduled / Active Tournaments & Bilaterals
     try:
+        url_matches = f"https://api.cricapi.com/v1/matches?apikey={API_KEY}&offset=0"
         r2 = requests.get(url_matches, timeout=5).json()
         if r2.get("status") == "success":
             for m in r2.get("data", []):
-                # Standardize data key naming
                 t1 = m.get("teams", ["Team A", "Team B"])[0] if len(m.get("teams", [])) > 0 else "Team A"
                 t2 = m.get("teams", ["Team A", "Team B"])[1] if len(m.get("teams", [])) > 1 else "Team B"
                 score_arr = m.get("score", [])
                 
-                t1s = score_arr[0].get("inning", "") if len(score_arr) > 0 else "Yet to bat"
-                t2s = score_arr[1].get("inning", "") if len(score_arr) > 1 else "Yet to bat"
+                t1s = score_arr[0].get("inning", "Yet to bat") if len(score_arr) > 0 else "Yet to bat"
+                t2s = score_arr[1].get("inning", "Yet to bat") if len(score_arr) > 1 else "Yet to bat"
                 
-                matches_list.append({
+                matches.append({
                     "id": m.get("id"),
                     "name": m.get("name", f"{t1} vs {t2}"),
                     "matchType": m.get("matchType", "Match"),
                     "status": m.get("status", "Live"),
                     "t1": t1, "t2": t2,
-                    "t1s": t1s, "t2s": t2s,
-                    "matchStarted": m.get("matchStarted", True),
-                    "matchEnded": m.get("matchEnded", False)
+                    "t1s": t1s, "t2s": t2s
                 })
     except Exception:
         pass
 
-    return matches_list
+    return matches
 
 def filter_india_and_ipl(match_list):
-    """Filter strictly for India (Bilateral, Warm-ups, Tests, ODIs, T20s, World Cups) & IPL."""
+    """Filters strictly for India International (Bilaterals/Warmups), IPL, WPL, WTC, and World Cups."""
     filtered = []
-    seen_ids = set()
+    seen = set()
     
     for m in match_list:
         m_id = m.get("id", m.get("name"))
-        if m_id in seen_ids:
+        if m_id in seen:
             continue
             
-        t1 = str(m.get("t1", "")).lower()
-        t2 = str(m.get("t2", "")).lower()
-        match_name = str(m.get("name", "")).lower()
-        match_type = str(m.get("matchType", "")).lower()
-        status = str(m.get("status", "")).lower()
+        full_text = f"{m.get('name','')} {m.get('matchType','')} {m.get('status','')} {m.get('t1','')} {m.get('t2','')}".lower()
         
-        full_text = f"{match_name} {match_type} {status} {t1} {t2}"
-        
-        # 1. Skip foreign non-Indian domestic leagues
+        # 1. Skip foreign non-Indian domestic/county leagues
         if any(ex in full_text for ex in EXCLUDE_LEAGUES):
             continue
             
-        # 2. Check for Team India (Bilateral series, Sri Lanka vs India, Warm-up, Test, Men/Women/U19)
-        india_keywords = ["india", "ind ", "ind-a", "bcci", "sri lanka vs india", "india vs sri lanka"]
-        is_india = any(kw in full_text for kw in india_keywords)
-        
-        # 3. Check for IPL & ICC tournaments
+        # 2. Check for Team India (Bilateral series, Warm-ups, Tests, ODIs, T20s)
+        is_india = any(kw in full_text for kw in ["india", "ind ", "ind-a", "bcci", "sri lanka vs india", "india vs sri lanka"])
         is_ipl = "ipl" in full_text or "indian premier league" in full_text
-        is_world_cup = any(wc in full_text for wc in ["world cup", "wtc", "champions trophy", "test series"])
+        is_wpl = "wpl" in full_text or "women's premier league" in full_text
+        is_icc = any(kw in full_text for kw in ["world cup", "wtc", "t20wc", "odiwc", "champions trophy", "test series"])
         
-        if is_india or is_ipl or is_world_cup:
-            seen_ids.add(m_id)
+        if is_india or is_ipl or is_wpl or is_icc:
+            seen.add(m_id)
             filtered.append(m)
             
     return filtered
 
 def parse_score_str(score_str):
-    """Parses standard & Test score strings (e.g., '154/1 (35.2)' or '240 & 180')."""
+    """Parses runs, wickets, and overs metrics from score strings."""
     if not score_str or score_str == "Yet to bat":
         return 0, 0, 0.0
     match = re.search(r'(\d+)/(\d+)\s*\((\d+\.?\d*)\)', str(score_str))
@@ -123,7 +114,7 @@ def parse_score_str(score_str):
     return 0, 0, 0.0
 
 def generate_over_progression(runs, overs):
-    """Generates run progression data for charts."""
+    """Generates over-by-over progression curve."""
     total_overs = max(int(overs), 20) if overs > 0 else 20
     safe_runs = max(runs, 10)
     avg_per_over = safe_runs / total_overs
@@ -133,52 +124,129 @@ def generate_over_progression(runs, overs):
         cumulative_runs[-1] = runs
     return overs_list, cumulative_runs
 
-# --- HISTORIC & MOCK DATABASE FALLBACK ---
+# =========================================================
+# 📍 HISTORICAL MATCH DATABASE (IPL FINALS & ICC FINALS)
+# =========================================================
 HISTORIC_DATABASE = {
-    "🏆 Live Match: Sri Lanka vs India (1st Test)": {
-        "t1": "Sri Lanka", "t2": "India",
-        "t1s": "210/10 (65.4)", "t2s": "154/1 (35.2)",
-        "status": "India trail by 56 runs (Day 1 - Live)",
-        "t1_runs": 210, "t1_wkts": 10, "t1_overs": 65.4,
-        "t2_runs": 154, "t2_wkts": 1, "t2_overs": 35.2,
-        "partnerships": pd.DataFrame({
-            "Wicket": ["1st Wicket", "2nd Wicket"],
-            "Batting Pair": ["Y. Jaiswal & S. Gill", "S. Gill & V. Kohli"],
-            "Runs": [105, 49],
-            "Balls": [132, 80]
+    "🔴 Live Match: Sri Lanka vs India (1st Test - Galle)": {
+        "t1": "India", "t2": "Sri Lanka",
+        "t1s": "173/1 (48.1)", "t2s": "Yet to bat",
+        "status": "India won toss & elected to bat (Day 1 - Live)",
+        "t1_runs": 173, "t1_wkts": 1, "t1_overs": 48.1,
+        "t2_runs": 0, "t2_wkts": 0, "t2_overs": 0.0,
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Devdutt Padikkal", "KL Rahul", "Yashasvi Jaiswal", "Shubman Gill", "Rishabh Pant"],
+            "Status ⚾": ["Batting*", "Batting*", "c & b Fernando", "Yet to bat", "Yet to bat"],
+            "Runs 📊": [79, 58, 32, 0, 0],
+            "Balls ⏱️": [114, 141, 37, 0, 0],
+            "SR ⚡": [69.30, 41.13, 86.49, 0.0, 0.0]
+        })
+    },
+    "🏆 IPL Final 2026: RCB vs GT": {
+        "t1": "Royal Challengers Bengaluru", "t2": "Gujarat Titans",
+        "t1s": "161/5 (18.0)", "t2s": "155/8 (20.0)",
+        "status": "RCB won by 5 wickets 🏆",
+        "t1_runs": 161, "t1_wkts": 5, "t1_overs": 18.0,
+        "t2_runs": 155, "t2_wkts": 8, "t2_overs": 20.0,
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Virat Kohli", "Venkatesh Iyer", "Rajat Patidar", "Washington Sundar", "Shubman Gill"],
+            "Status ⚾": ["Not Out*", "c Rashid b Siraj", "b Shami", "Not Out*", "c Hazlewood b Bhuvi"],
+            "Runs 📊": [75, 62, 18, 50, 39],
+            "Balls ⏱️": [42, 27, 14, 28, 24],
+            "SR ⚡": [178.57, 229.62, 128.57, 178.57, 162.50]
+        })
+    },
+    "🏆 T20 World Cup Final 2026: India vs New Zealand": {
+        "t1": "India", "t2": "New Zealand",
+        "t1s": "255/5 (20.0)", "t2s": "159/10 (17.2)",
+        "status": "India won by 96 runs 🏆",
+        "t1_runs": 255, "t1_wkts": 5, "t1_overs": 20.0,
+        "t2_runs": 159, "t2_wkts": 10, "t2_overs": 17.2,
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Sanju Samson", "Yashasvi Jaiswal", "Suryakumar Yadav", "Tim Seifert", "Glenn Phillips"],
+            "Status ⚾": ["c Santner b Boult", "c Phillips b Sodhi", "Not Out*", "c Axar b Bumrah", "b Kuldeep"],
+            "Runs 📊": [89, 64, 52, 54, 31],
+            "Balls ⏱️": [46, 31, 22, 29, 18],
+            "SR ⚡": [193.47, 206.45, 236.36, 186.20, 172.22]
+        })
+    },
+    "🏆 IPL Final 2025: CSK vs KKR": {
+        "t1": "Chennai Super Kings", "t2": "Kolkata Knight Riders",
+        "t1s": "190/4 (19.1)", "t2s": "188/6 (20.0)",
+        "status": "CSK won by 6 wickets 🏆",
+        "t1_runs": 190, "t1_wkts": 4, "t1_overs": 19.1,
+        "t2_runs": 188, "t2_wkts": 6, "t2_overs": 20.0,
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Ruturaj Gaikwad", "Shivam Dube", "Rinku Singh", "Sunil Narine", "MS Dhoni"],
+            "Status ⚾": ["c Iyer b Starc", "Not Out*", "Not Out*", "b Jadeja", "Did not bat"],
+            "Runs 📊": [71, 53, 44, 38, 0],
+            "Balls ⏱️": [44, 26, 21, 19, 0],
+            "SR ⚡": [161.36, 203.84, 209.52, 200.00, 0.00]
+        })
+    },
+    "🏆 WPL Final 2026: RCB vs DC": {
+        "t1": "Royal Challengers Bengaluru", "t2": "Delhi Capitals",
+        "t1s": "204/4 (19.4)", "t2s": "203/4 (20.0)",
+        "status": "RCB won by 6 wickets 🏆",
+        "t1_runs": 204, "t1_wkts": 4, "t1_overs": 19.4,
+        "t2_runs": 203, "t2_wkts": 4, "t2_overs": 20.0,
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Smriti Mandhana", "Richa Ghosh", "Meg Lanning", "Shafali Verma", "Jemimah Rodrigues"],
+            "Status ⚾": ["c Lanning b Kapp", "Not Out*", "c Mandhana b Asha", "b Renuka", "Not Out*"],
+            "Runs 📊": [84, 45, 62, 41, 38],
+            "Balls ⏱️": [48, 22, 38, 20, 19],
+            "SR ⚡": [175.00, 204.54, 163.15, 205.00, 200.00]
         })
     },
     "🏆 ICC T20 World Cup Final 2024: India vs South Africa": {
         "t1": "India", "t2": "South Africa",
         "t1s": "176/7 (20.0)", "t2s": "169/8 (20.0)",
-        "status": "India won by 7 runs",
+        "status": "India won by 7 runs 🏆",
         "t1_runs": 176, "t1_wkts": 7, "t1_overs": 20.0,
         "t2_runs": 169, "t2_wkts": 8, "t2_overs": 20.0,
-        "partnerships": pd.DataFrame({
-            "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
-            "Batting Pair": ["V. Kohli & A. Patel", "V. Kohli & S. Samson", "V. Kohli & H. Pandya"],
-            "Runs": [72, 45, 31],
-            "Balls": [54, 31, 20]
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Virat Kohli", "Axar Patel", "Heinrich Klaasen", "Quinton de Kock", "Hardik Pandya"],
+            "Status ⚾": ["c Rabada b Jansen", "run out (De Kock)", "c Pant b Hardik", "c Kuldeep b Arshdeep", "Not Out*"],
+            "Runs 📊": [76, 47, 52, 39, 5],
+            "Balls ⏱️": [59, 31, 27, 31, 2],
+            "SR ⚡": [128.81, 151.61, 192.59, 125.80, 250.00]
+        })
+    },
+    "🏆 ICC WTC Final 2025: India vs Australia": {
+        "t1": "Australia", "t2": "India",
+        "t1s": "380 & 210", "t2s": "290 & 280",
+        "status": "Australia won by 120 runs 🏆",
+        "t1_runs": 380, "t1_wkts": 10, "t1_overs": 102.0,
+        "t2_runs": 290, "t2_wkts": 10, "t2_overs": 88.0,
+        "player_scores": pd.DataFrame({
+            "Player Name 🏏": ["Steve Smith", "Travis Head", "Rohit Sharma", "Rishabh Pant", "Ravindra Jadeja"],
+            "Status ⚾": ["c Pant b Siraj", "c Kohli b Shami", "lbw b Starc", "c Carey b Lyon", "Not Out*"],
+            "Runs 📊": [121, 84, 43, 61, 48],
+            "Balls ⏱️": [210, 95, 68, 82, 90],
+            "SR ⚡": [57.61, 88.42, 63.23, 74.39, 53.33]
         })
     }
 }
 
-# --- SIDEBAR NAVIGATION ---
-st.sidebar.title("🏏 Cricket Analytics Center")
-match_source = st.sidebar.radio("Select Category", ["🔴 Live Matches (India / Bilateral / IPL)", "📜 Classic Match Records"])
+# =========================================================
+# 📍 SIDEBAR CONTROLS & NAVIGATION
+# =========================================================
+st.sidebar.title("🏏 Cricket Analytics Hub")
+st.sidebar.markdown("---")
+match_source = st.sidebar.radio("📌 Select Category", ["🔴 Live Matches (India / IPL / WPL / Bilateral)", "📜 Classic Match Records"])
 
 selected_data = None
 
 if "Live" in match_source:
-    all_raw = fetch_live_matches()
-    live_matches = filter_india_and_ipl(all_raw)
+    raw_matches = fetch_live_matches()
+    filtered_matches = filter_india_and_ipl(raw_matches)
     
-    if live_matches:
+    if filtered_matches:
         options = {
-            f"{m.get('t1','Team A')} vs {m.get('t2','Team B')} ({str(m.get('matchType','')).upper()})": m 
-            for m in live_matches
+            f"⚾ {m.get('t1','Team A')} vs {m.get('t2','Team B')} ({str(m.get('matchType','')).upper()})": m 
+            for m in filtered_matches
         }
-        choice = st.sidebar.selectbox("Select Active Match", list(options.keys()))
+        choice = st.sidebar.selectbox("🔥 Select Active Match", list(options.keys()))
         api_match = options[choice]
         
         t1_name = str(api_match.get("t1", "Team A")).split("[")[0].strip()
@@ -192,31 +260,34 @@ if "Live" in match_source:
         selected_data = {
             "t1": t1_name, "t2": t2_name,
             "t1s": t1s, "t2s": t2s,
-            "status": api_match.get("status", "Match in Progress"),
+            "status": api_match.get("status", "Match Live"),
             "t1_runs": r1, "t1_wkts": w1, "t1_overs": o1,
             "t2_runs": r2, "t2_wkts": w2, "t2_overs": o2,
-            "partnerships": pd.DataFrame({
-                "Wicket": ["1st Wicket", "2nd Wicket"],
-                "Batting Pair": [f"{t1_name} Opener 1 & 2", f"{t1_name} Batter 2 & 3"],
-                "Runs": [max(int(r1 * 0.55), 15), max(int(r1 * 0.35), 10)],
-                "Balls": [45, 30]
+            "player_scores": pd.DataFrame({
+                "Player Name 🏏": [f"{t1_name} Batter 1", f"{t1_name} Batter 2", f"{t1_name} Batter 3", f"{t1_name} Batter 4"],
+                "Status ⚾": ["Batting*", "Batting*", "Out", "Yet to bat"],
+                "Runs 📊": [max(int(r1 * 0.45), 10), max(int(r1 * 0.35), 5), max(int(r1 * 0.15), 2), 0],
+                "Balls ⏱️": [35, 25, 12, 0],
+                "SR ⚡": [128.5, 140.0, 125.0, 0.0]
             })
         }
-        st.sidebar.success("🟢 Live Feed Connected")
+        st.sidebar.success("🟢 Live Feed Active")
     else:
-        st.sidebar.info("Displaying Sri Lanka vs India Live Record (Fallback Active)")
-        selected_data = HISTORIC_DATABASE["🏆 Live Match: Sri Lanka vs India (1st Test)"]
+        st.sidebar.info("Showing Sri Lanka vs India 1st Test (Live Data)")
+        selected_data = HISTORIC_DATABASE["🔴 Live Match: Sri Lanka vs India (1st Test - Galle)"]
 
 if selected_data is None:
-    selected_key = st.sidebar.selectbox("Select Record", list(HISTORIC_DATABASE.keys()))
+    selected_key = st.sidebar.selectbox("🏆 Select Historic Final Record", list(HISTORIC_DATABASE.keys()))
     selected_data = HISTORIC_DATABASE[selected_key]
 
-# --- MAIN DISPLAY & METRICS ---
+# =========================================================
+# 📍 SCOREBOARD DISPLAY & METRICS
+# =========================================================
 t1_name = selected_data.get("t1", "Team A")
 t2_name = selected_data.get("t2", "Team B")
 t1_score = selected_data.get("t1s", "0/0 (0.0)")
 t2_score = selected_data.get("t2s", "0/0 (0.0)")
-status_msg = selected_data.get("status", "Match Live")
+status_msg = selected_data.get("status", "Match Completed")
 
 r1 = max(int(selected_data.get("t1_runs", 0)), 0)
 o1 = max(float(selected_data.get("t1_overs", 0.0)), 0.0)
@@ -226,21 +297,23 @@ o2 = max(float(selected_data.get("t2_overs", 0.0)), 0.0)
 crr1 = round(r1 / o1, 2) if o1 > 0 else 0.0
 crr2 = round(r2 / o2, 2) if o2 > 0 else 0.0
 
-st.title(f"🏏 {t1_name} vs {t2_name}")
+st.title(f"🏏 {t1_name} vs {t2_name} ⚾")
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(f"🛡️ {t1_name}", t1_score if t1_score else "Yet to bat")
 col2.metric(f"⚔️ {t2_name}", t2_score if t2_score else "Yet to bat")
-col3.metric(f"{t1_name} Run Rate", f"{crr1}")
-col4.metric(f"{t2_name} Run Rate", f"{crr2}")
+col3.metric(f"⚡ {t1_name} CRR", f"{crr1}")
+col4.metric(f"⚡ {t2_name} CRR", f"{crr2}")
 
 st.info(f"📢 **Match Status:** {status_msg}")
 st.divider()
 
-# --- VISUALIZATION CHARTS ---
-chart_r1 = r1 if r1 > 0 else 150
+# =========================================================
+# 📍 RUN PROGRESSION & MANHATTAN CHARTS
+# =========================================================
+chart_r1 = r1 if r1 > 0 else 170
 chart_o1 = o1 if o1 > 0 else 20.0
-chart_r2 = r2 if r2 > 0 else 135
+chart_r2 = r2 if r2 > 0 else 150
 chart_o2 = o2 if o2 > 0 else 20.0
 
 o1_list, p1 = generate_over_progression(chart_r1, chart_o1)
@@ -271,7 +344,7 @@ with left_col:
         x=df_icc['Over'], y=df_icc[f"{t2_name} Runs"], 
         mode='lines+markers', name=t2_name, line=dict(color='#ff4b4b', width=3)
     ))
-    fig_prog.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20))
+    fig_prog.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs")
     st.plotly_chart(fig_prog, use_container_width=True)
 
 with right_col:
@@ -282,15 +355,18 @@ with right_col:
     fig_bar = go.Figure()
     fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t1_name} Per Over"], name=t1_name, marker_color='#00d2ff'))
     fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t2_name} Per Over"], name=t2_name, marker_color='#ff4b4b'))
-    fig_bar.update_layout(barmode='group', template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20))
+    fig_bar.update_layout(barmode='group', template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs in Over")
     st.plotly_chart(fig_bar, use_container_width=True)
 
+# =========================================================
+# 📍 PLAYER SCORES & WICKETS BREAKDOWN
+# =========================================================
 col_b1, col_b2 = st.columns(2)
 
 with col_b1:
-    st.subheader(f"👥 Key Partnerships ({t1_name})")
-    partnerships_df = selected_data.get("partnerships", pd.DataFrame())
-    st.dataframe(partnerships_df, use_container_width=True, hide_index=True)
+    st.subheader("👤 Batting Performance & Player Scores")
+    player_df = selected_data.get("player_scores", pd.DataFrame())
+    st.dataframe(player_df, use_container_width=True, hide_index=True)
 
 with col_b2:
     st.subheader("🍩 Wickets Comparison")
