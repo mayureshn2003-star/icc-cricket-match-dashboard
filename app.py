@@ -6,7 +6,7 @@ import requests
 import re
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="BCCI & International Cricket Dashboard", layout="wide")
+st.set_page_config(page_title="India & IPL Live Scoreboard", layout="wide")
 
 # Custom Dark Theme Styling
 st.markdown("""
@@ -24,30 +24,55 @@ st.markdown("""
 API_KEY = "711705be-d176-4692-969d-8d6cc93b4e4b"
 
 # =========================================================
-# 📍 EXPANDED MATCH FILTERING (IPL, BCCI, TEST, ODI, T20I)
+# 📍 STRICT FILTERING LOGIC FOR INDIA & IPL MATCHES
 # =========================================================
-MATCH_KEYWORDS = [
-    "ipl", "indian premier league", "t20", "t20i", "odi", "test", 
-    "india", "bcci", "world cup", "champions trophy", "wtc", "u19",
-    "ranji", "dpl", "bbl", "psl", "cpl", "super smash"
+# List of non-Indian domestic/county leagues to filter out strictly
+EXCLUDE_LEAGUES = [
+    "tnpl", "cpl", "bbl", "psl", "hundred", "sa20", "ilt20", 
+    "vitality blast", "super smash", "county", "derbyshire", "durham", 
+    "kent", "middlesex", "lanka premier league", "lpl", "bpl"
 ]
 
-def filter_all_matches(match_list):
-    """Filters live API matches to include IPL, BCCI domestic, and all international formats."""
+def filter_india_and_ipl(match_list):
+    """
+    Filters API results to only display:
+    1. IPL matches
+    2. Any India international match (Bilateral series, T20I, ODI, Test, WTC)
+    3. India warm-up / practice / tour matches
+    4. World Cup matches (T20 / ODI / WTC)
+    """
     filtered_matches = []
+    
     for m in match_list:
+        t1 = str(m.get("t1", "")).lower()
+        t2 = str(m.get("t2", "")).lower()
         match_name = str(m.get("name", "")).lower()
         match_type = str(m.get("matchType", "")).lower()
-        match_status = str(m.get("status", "")).lower()
-        full_text = f"{match_name} {match_type} {match_status}"
+        status = str(m.get("status", "")).lower()
         
-        if any(kw in full_text for kw in MATCH_KEYWORDS):
+        full_text = f"{match_name} {match_type} {status} {t1} {t2}"
+        
+        # 1. Skip if it belongs to an explicitly excluded foreign domestic/county league
+        if any(ex in full_text for ex in EXCLUDE_LEAGUES):
+            continue
+            
+        # 2. Check if it's an IPL match
+        is_ipl = "ipl" in full_text or "indian premier league" in full_text
+        
+        # 3. Check if Team India is participating (Includes Men, Women, U19, India A, Warm-ups)
+        india_keywords = ["india", "ind ", "ind A", "ind-a", "bcci"]
+        is_india = any(kw in t1 or kw in t2 or kw in match_name for kw in india_keywords)
+        
+        # 4. Check if it's a major World Cup or WTC fixture
+        is_world_cup = any(wc in full_text for wc in ["world cup", "wtc", "champions trophy"])
+        
+        if is_ipl or is_india or is_world_cup:
             filtered_matches.append(m)
             
-    return filtered_matches if filtered_matches else match_list
+    return filtered_matches
 
 def fetch_live_matches():
-    """Fetches active matches from CricAPI."""
+    """Fetches live matches from CricAPI."""
     url = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
     try:
         response = requests.get(url)
@@ -87,19 +112,6 @@ def generate_over_progression(runs, overs):
 # 📍 HISTORICAL MATCHES DATABASE
 # =========================================================
 HISTORIC_DATABASE = {
-    "🏆 IPL Final 2023: CSK vs GT": {
-        "t1": "Chennai Super Kings", "t2": "Gujarat Titans",
-        "t1s": "171/5 (15.0)", "t2s": "214/4 (20.0)",
-        "status": "CSK won by 5 wickets (DLS method)",
-        "t1_runs": 171, "t1_wkts": 5, "t1_overs": 15.0,
-        "t2_runs": 214, "t2_wkts": 4, "t2_overs": 20.0,
-        "partnerships": pd.DataFrame({
-            "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
-            "Batting Pair": ["R. Gaikwad & D. Conway", "S. Dube & A. Rayudu", "R. Jadeja & S. Dube"],
-            "Runs": [74, 32, 21],
-            "Balls": [39, 16, 12]
-        })
-    },
     "🏆 ICC T20 World Cup Final 2024: India vs South Africa": {
         "t1": "India", "t2": "South Africa",
         "t1s": "176/7 (20.0)", "t2s": "169/8 (20.0)",
@@ -111,6 +123,19 @@ HISTORIC_DATABASE = {
             "Batting Pair": ["V. Kohli & A. Patel", "V. Kohli & S. Samson", "V. Kohli & H. Pandya"],
             "Runs": [72, 45, 31],
             "Balls": [54, 31, 20]
+        })
+    },
+    "🏆 IPL Final 2023: CSK vs GT": {
+        "t1": "Chennai Super Kings", "t2": "Gujarat Titans",
+        "t1s": "171/5 (15.0)", "t2s": "214/4 (20.0)",
+        "status": "CSK won by 5 wickets (DLS method)",
+        "t1_runs": 171, "t1_wkts": 5, "t1_overs": 15.0,
+        "t2_runs": 214, "t2_wkts": 4, "t2_overs": 20.0,
+        "partnerships": pd.DataFrame({
+            "Wicket": ["1st Wicket", "2nd Wicket", "3rd Wicket"],
+            "Batting Pair": ["R. Gaikwad & D. Conway", "S. Dube & A. Rayudu", "R. Jadeja & S. Dube"],
+            "Runs": [74, 32, 21],
+            "Balls": [39, 16, 12]
         })
     },
     "🏆 ICC ODI World Cup Final 2023: Australia vs India": {
@@ -132,13 +157,13 @@ HISTORIC_DATABASE = {
 # 📍 SIDEBAR CONTROLS & NAVIGATION
 # =========================================================
 st.sidebar.title("🏏 Cricket Analytics Center")
-match_source = st.sidebar.radio("Select Category", ["🔴 Live Matches (IPL / INT)", "📜 Classic Match Records"])
+match_source = st.sidebar.radio("Select Category", ["🔴 Live India & IPL Matches", "📜 Classic Match Records"])
 
 selected_data = None
 
 if "Live" in match_source:
     all_live = fetch_live_matches()
-    live_matches = filter_all_matches(all_live)
+    live_matches = filter_india_and_ipl(all_live)
     
     if live_matches:
         options = {
@@ -169,9 +194,9 @@ if "Live" in match_source:
                 "Balls": [30, 20, 12]
             })
         }
-        st.sidebar.success("🟢 Live Match Feed Connected")
+        st.sidebar.success("🟢 Live Feed Active")
     else:
-        st.sidebar.info("No active matches currently live. Showing historic records.")
+        st.sidebar.info("No active India or IPL matches live currently. Showing historic records.")
         match_source = "📜 Classic Match Records"
 
 if "Records" in match_source or selected_data is None:
