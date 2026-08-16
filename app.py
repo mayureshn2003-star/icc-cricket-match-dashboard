@@ -104,7 +104,6 @@ else:
     @st.cache_data(ttl=30)
     def fetch_realtime_matches():
         headers = {'User-Agent': 'Mozilla/5.0'}
-        # Primary API Call
         try:
             url = f"https://api.cricapi.com/v1/currentMatches?apikey={API_KEY}&offset=0"
             res = requests.get(url, headers=headers, timeout=5).json()
@@ -113,7 +112,6 @@ else:
         except Exception:
             pass
 
-        # Fallback Score Endpoint
         try:
             url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
             res2 = requests.get(url_score, headers=headers, timeout=5).json()
@@ -148,12 +146,13 @@ else:
         return 0, 0, 0.0
 
     def generate_over_progression(runs, overs):
-        total_overs = max(int(overs), 20) if overs > 0 else 20
-        safe_runs = max(runs, 10)
-        avg_per_over = safe_runs / total_overs
+        if runs == 0 or overs == 0:
+            return [], []
+        total_overs = int(overs) if overs >= 1 else 1
+        avg_per_over = runs / total_overs
         overs_list = list(range(1, total_overs + 1))
         cumulative_runs = [round(avg_per_over * i) for i in overs_list]
-        if cumulative_runs and runs > 0:
+        if cumulative_runs:
             cumulative_runs[-1] = runs
         return overs_list, cumulative_runs
 
@@ -262,15 +261,7 @@ else:
 
         if "Live" in match_source:
             matches_data = fetch_realtime_matches()
-            
-            # Debug view to see what API returns
-            with st.sidebar.expander("🛠️ API Debug Info"):
-                st.write(f"Matches Fetched: {len(matches_data)}")
-                st.json(matches_data[:2] if matches_data else {"message": "No live matches returned from API key"})
-
-            active_match = None
-            if len(matches_data) > 0:
-                active_match = matches_data[0]
+            active_match = matches_data[0] if len(matches_data) > 0 else None
 
             if active_match:
                 match_id = active_match.get("id")
@@ -315,7 +306,6 @@ else:
                     "player_scores": pd.DataFrame(player_list) if player_list else pd.DataFrame()
                 }
             else:
-                st.warning("⚠️ CricAPI returned no live matches or quota reached. Showing default match context.")
                 selected_data = {
                     "t1": "India", "t2": "Sri Lanka",
                     "t1s": "288/2 (73.0)", "t2s": "Yet to bat",
@@ -355,20 +345,25 @@ else:
         st.info(f"📢 **Match Status:** {status_msg}")
         st.divider()
 
+        # Generate accurate progression lists based on match state
         o1_list, p1 = generate_over_progression(r1, o1)
-        o2_list, p2 = generate_over_progression(r2 if r2 > 0 else 100, o2 if o2 > 0 else 20.0)
+        o2_list, p2 = generate_over_progression(r2, o2)
 
-        max_overs = max(len(o1_list), len(o2_list))
+        max_overs = max(len(o1_list), len(o2_list), 1)
         all_overs = list(range(1, max_overs + 1))
 
-        p1_padded = p1 + [r1] * (max_overs - len(p1))
-        p2_padded = p2 + [r2] * (max_overs - len(p2))
+        p1_padded = p1 + [r1] * (max_overs - len(p1)) if p1 else [0] * max_overs
+        p2_padded = p2 + [r2] * (max_overs - len(p2)) if p2 else [0] * max_overs
 
         df_icc = pd.DataFrame({
             "Over": all_overs,
             f"{t1_name} Runs": p1_padded,
             f"{t2_name} Runs": p2_padded
         })
+
+        # Calculate Runs per Over safely
+        df_icc[f"{t1_name} Per Over"] = df_icc[f"{t1_name} Runs"].diff().fillna(df_icc[f"{t1_name} Runs"].iloc[0]).clip(lower=0)
+        df_icc[f"{t2_name} Per Over"] = df_icc[f"{t2_name} Runs"].diff().fillna(df_icc[f"{t2_name} Runs"].iloc[0]).clip(lower=0)
 
         left_col, right_col = st.columns(2)
 
@@ -383,18 +378,28 @@ else:
                 x=df_icc['Over'], y=df_icc[f"{t2_name} Runs"], 
                 mode='lines+markers', name=t2_name, line=dict(color='#ff4b4b', width=3)
             ))
-            fig_prog.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs")
+            fig_prog.update_layout(
+                template="plotly_dark", 
+                height=320, 
+                margin=dict(l=20, r=20, t=20, b=20), 
+                xaxis_title="Overs", 
+                yaxis_title="Runs"
+            )
             st.plotly_chart(fig_prog, use_container_width=True)
 
         with right_col:
             st.subheader("📊 Manhattan Chart (Runs Per Over)")
-            df_icc[f"{t1_name} Per Over"] = df_icc[f"{t1_name} Runs"].diff().fillna(df_icc[f"{t1_name} Runs"].iloc[0])
-            df_icc[f"{t2_name} Per Over"] = df_icc[f"{t2_name} Runs"].diff().fillna(df_icc[f"{t2_name} Runs"].iloc[0])
-            
             fig_bar = go.Figure()
             fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t1_name} Per Over"], name=t1_name, marker_color='#00d2ff'))
             fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t2_name} Per Over"], name=t2_name, marker_color='#ff4b4b'))
-            fig_bar.update_layout(barmode='group', template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs in Over")
+            fig_bar.update_layout(
+                barmode='group', 
+                template="plotly_dark", 
+                height=320, 
+                margin=dict(l=20, r=20, t=20, b=20), 
+                xaxis_title="Overs", 
+                yaxis_title="Runs in Over"
+            )
             st.plotly_chart(fig_bar, use_container_width=True)
 
         col_b1, col_b2 = st.columns(2)
