@@ -24,7 +24,7 @@ if st.session_state.page == "landing":
         <style>
             .stApp {
                 background: linear-gradient(rgba(11, 15, 25, 0.75), rgba(11, 15, 25, 0.85)), 
-                            url("[https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop](https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop)");
+                            url("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop");
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
@@ -80,7 +80,7 @@ else:
         <style>
             .stApp {
                 background: linear-gradient(rgba(11, 15, 25, 0.85), rgba(11, 15, 25, 0.90)), 
-                            url("[https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop](https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop)");
+                            url("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop");
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
@@ -101,11 +101,12 @@ else:
 
     API_KEY = "711705be-d176-4692-969d-8d6cc93b4e4b"
 
+    @st.cache_data(ttl=30)
     def fetch_realtime_matches():
         headers = {'Cache-Control': 'no-cache'}
         
         try:
-            url = f"[https://api.cricapi.com/v1/currentMatches?apikey=](https://api.cricapi.com/v1/currentMatches?apikey=){API_KEY}&offset=0"
+            url = f"https://api.cricapi.com/v1/currentMatches?apikey={API_KEY}&offset=0"
             res = requests.get(url, headers=headers, timeout=5).json()
             if res.get("status") == "success" and res.get("data"):
                 return res.get("data")
@@ -113,7 +114,7 @@ else:
             print(f"Primary Fetch Error: {e}")
 
         try:
-            url_score = f"[https://api.cricapi.com/v1/cricScore?apikey=](https://api.cricapi.com/v1/cricScore?apikey=){API_KEY}"
+            url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
             res2 = requests.get(url_score, headers=headers, timeout=5).json()
             if res2.get("status") == "success" and res2.get("data"):
                 return res2.get("data")
@@ -122,9 +123,10 @@ else:
 
         return []
 
+    @st.cache_data(ttl=30)
     def fetch_match_scorecard(match_id):
         headers = {'Cache-Control': 'no-cache'}
-        url = f"[https://api.cricapi.com/v1/match_scorecard?apikey=](https://api.cricapi.com/v1/match_scorecard?apikey=){API_KEY}&id={match_id}"
+        url = f"https://api.cricapi.com/v1/match_scorecard?apikey={API_KEY}&id={match_id}"
         try:
             res = requests.get(url, headers=headers, timeout=5).json()
             if res.get("status") == "success":
@@ -250,14 +252,15 @@ else:
     match_source = st.sidebar.radio("📌 Select Category", ["🔴 Live Matches (Real-Time API)", "📜 Classic Match Records"])
 
     if st.sidebar.button("🔄 Refresh API Stream"):
+        st.cache_data.clear()
         st.rerun()
 
     selected_key = None
     if "Live" not in match_source:
         selected_key = st.sidebar.selectbox("🏆 Select Historic Record", list(HISTORIC_DATABASE.keys()))
 
-    # Dynamic Auto-Refreshing Fragment
-    @st.fragment(run_every=5)
+    # Dynamic Auto-Refreshing Fragment (Updated to 30 Seconds)
+    @st.fragment(run_every=30)
     def render_live_dashboard():
         selected_data = None
 
