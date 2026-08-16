@@ -24,7 +24,7 @@ if st.session_state.page == "landing":
         <style>
             .stApp {
                 background: linear-gradient(rgba(11, 15, 25, 0.75), rgba(11, 15, 25, 0.85)), 
-                            url("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop");
+                            url("[https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop](https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop)");
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
@@ -80,7 +80,7 @@ else:
         <style>
             .stApp {
                 background: linear-gradient(rgba(11, 15, 25, 0.85), rgba(11, 15, 25, 0.90)), 
-                            url("https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop");
+                            url("[https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop](https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?q=80&w=2000&auto=format&fit=crop)");
                 background-size: cover;
                 background-position: center;
                 background-attachment: fixed;
@@ -105,7 +105,7 @@ else:
         headers = {'Cache-Control': 'no-cache'}
         
         try:
-            url = f"https://api.cricapi.com/v1/currentMatches?apikey={API_KEY}&offset=0"
+            url = f"[https://api.cricapi.com/v1/currentMatches?apikey=](https://api.cricapi.com/v1/currentMatches?apikey=){API_KEY}&offset=0"
             res = requests.get(url, headers=headers, timeout=5).json()
             if res.get("status") == "success" and res.get("data"):
                 return res.get("data")
@@ -113,7 +113,7 @@ else:
             print(f"Primary Fetch Error: {e}")
 
         try:
-            url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
+            url_score = f"[https://api.cricapi.com/v1/cricScore?apikey=](https://api.cricapi.com/v1/cricScore?apikey=){API_KEY}"
             res2 = requests.get(url_score, headers=headers, timeout=5).json()
             if res2.get("status") == "success" and res2.get("data"):
                 return res2.get("data")
@@ -124,7 +124,7 @@ else:
 
     def fetch_match_scorecard(match_id):
         headers = {'Cache-Control': 'no-cache'}
-        url = f"https://api.cricapi.com/v1/match_scorecard?apikey={API_KEY}&id={match_id}"
+        url = f"[https://api.cricapi.com/v1/match_scorecard?apikey=](https://api.cricapi.com/v1/match_scorecard?apikey=){API_KEY}&id={match_id}"
         try:
             res = requests.get(url, headers=headers, timeout=5).json()
             if res.get("status") == "success":
@@ -155,7 +155,7 @@ else:
         return overs_list, cumulative_runs
 
     # =========================================================
-    # 📚 ALL 6 HISTORIC MATCHES DATABASE
+    # 📚 HISTORIC MATCHES DATABASE (6 Match Records)
     # =========================================================
     HISTORIC_DATABASE = {
         "🏆 IPL Final 2026: RCB vs GT": {
@@ -332,9 +332,6 @@ else:
                     "t2_runs": 0, "t2_wkts": 0, "t2_overs": 0.0,
                     "player_scores": pd.DataFrame([
                         {"Player Name 🏏": "D. Padikkal", "Status ⚾": "Batting*", "Runs 📊": 131, "Balls ⏱️": 178, "SR ⚡": 73.59},
-                        {"Player Name 🏏": "R. Pant", "Status ```python
-                    player_scores": pd.DataFrame([
-                        {"Player Name 🏏": "D. Padikkal", "Status ⚾": "Batting*", "Runs 📊": 131, "Balls ⏱️": 178, "SR ⚡": 73.59},
                         {"Player Name 🏏": "R. Pant", "Status ⚾": "Batting*", "Runs 📊": 27, "Balls ⏱️": 36, "SR ⚡": 75.00}
                     ])
                 }
@@ -394,3 +391,38 @@ else:
                 x=df_icc['Over'], y=df_icc[f"{t2_name} Runs"], 
                 mode='lines+markers', name=t2_name, line=dict(color='#ff4b4b', width=3)
             ))
+            fig_prog.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs")
+            st.plotly_chart(fig_prog, use_container_width=True)
+
+        with right_col:
+            st.subheader("📊 Manhattan Chart (Runs Per Over)")
+            df_icc[f"{t1_name} Per Over"] = df_icc[f"{t1_name} Runs"].diff().fillna(df_icc[f"{t1_name} Runs"].iloc[0])
+            df_icc[f"{t2_name} Per Over"] = df_icc[f"{t2_name} Runs"].diff().fillna(df_icc[f"{t2_name} Runs"].iloc[0])
+            
+            fig_bar = go.Figure()
+            fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t1_name} Per Over"], name=t1_name, marker_color='#00d2ff'))
+            fig_bar.add_trace(go.Bar(x=df_icc['Over'], y=df_icc[f"{t2_name} Per Over"], name=t2_name, marker_color='#ff4b4b'))
+            fig_bar.update_layout(barmode='group', template="plotly_dark", height=320, margin=dict(l=20, r=20, t=20, b=20), xaxis_title="Overs", yaxis_title="Runs in Over")
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        col_b1, col_b2 = st.columns(2)
+
+        with col_b1:
+            st.subheader("👤 Batting Performance & Player Scores")
+            player_df = selected_data.get("player_scores", pd.DataFrame())
+            st.dataframe(player_df, use_container_width=True, hide_index=True)
+
+        with col_b2:
+            st.subheader("🍩 Wickets Comparison")
+            w1 = selected_data.get("t1_wkts", 2)
+            w2 = selected_data.get("t2_wkts", 0)
+            
+            wicket_pie = pd.DataFrame({
+                "Team": [t1_name, t2_name],
+                "Wickets": [w1, w2 if w2 > 0 else 1]
+            })
+            fig_donut = px.pie(wicket_pie, values='Wickets', names='Team', hole=0.5, template="plotly_dark", color_discrete_sequence=['#00d2ff', '#ff4b4b'])
+            fig_donut.update_layout(height=260, margin=dict(l=20, r=20, t=20, b=20))
+            st.plotly_chart(fig_donut, use_container_width=True)
+
+    render_live_dashboard()
