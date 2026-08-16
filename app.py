@@ -10,7 +10,6 @@ import re
 # =========================================================
 st.set_page_config(page_title="Mayuresh's Cricket Analytics Hub", layout="wide")
 
-# Initialize session state for navigation
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 
@@ -63,7 +62,7 @@ if st.session_state.page == "landing":
         st.markdown("""
             <div class="welcome-container">
                 <div class="welcome-title">🏏 Welcome to Mayuresh's Cricket Analytics Hub</div>
-                <div class="welcome-subtitle">Real-time Scores, Player Insights & Dynamic Match Data</div>
+                <div class="welcome-subtitle">Real-time Scores, Player Insights & Historic Match Records</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -145,6 +144,16 @@ else:
             print(f"Error fetching currentMatches: {e}")
 
         return matches
+
+    def fetch_match_detail(match_id):
+        url = f"https://api.cricapi.com/v1/match_scorecard?apikey={API_KEY}&id={match_id}"
+        try:
+            res = requests.get(url, timeout=10).json()
+            if res.get("status") == "success":
+                return res.get("data", {})
+        except Exception as e:
+            print(f"Scorecard Error: {e}")
+        return None
 
     def filter_india_and_ipl(match_list):
         filtered = []
@@ -308,7 +317,7 @@ else:
     # Sidebar Navigation
     st.sidebar.title("🏏 Mayuresh's Cricket Hub")
     st.sidebar.markdown("---")
-    match_source = st.sidebar.radio("📌 Select Category", ["🔴 Live Matches (India / IPL / WPL)", "📜 Classic Match Records"])
+    match_source = st.sidebar.radio("📌 Select Category", ["🔴 Live Matches (Real-Time)", "📜 Classic Match Records"])
 
     if st.sidebar.button("🔄 Force Refresh Data"):
         st.rerun()
@@ -317,8 +326,8 @@ else:
     if "Live" not in match_source:
         selected_key = st.sidebar.selectbox("🏆 Select Historic Record", list(HISTORIC_DATABASE.keys()))
 
-    # Dashboard Fragment
-    @st.fragment(run_every=20)
+    # Dashboard Fragment with 5-second polling
+    @st.fragment(run_every=5)
     def render_live_dashboard():
         selected_data = None
 
@@ -328,6 +337,11 @@ else:
             
             if filtered_matches:
                 api_match = filtered_matches[0]
+                match_id = api_match.get("id")
+                
+                # Fetch ball-by-ball / scorecard details
+                detailed_card = fetch_match_detail(match_id) if match_id else None
+                
                 t1_name = str(api_match.get("t1", "India")).split("[")[0].strip()
                 t2_name = str(api_match.get("t2", "Sri Lanka")).split("[")[0].strip()
                 t1s = str(api_match.get("t1s", "197/1 (54.0)"))
@@ -347,7 +361,7 @@ else:
                     "player_scores": build_dynamic_player_df(t1_name, r1, w1)
                 }
             else:
-                st.warning("⚠️ Live API feed currently unavailable; displaying active match stats.")
+                st.warning("⚠️ Live API feed currently offline; displaying active match simulation.")
                 selected_data = {
                     "t1": "India", "t2": "Sri Lanka",
                     "t1s": "197/1 (54.0)", "t2s": "Yet to bat",
@@ -387,7 +401,7 @@ else:
         col3.metric(f"⚡ {t1_name} CRR", f"{crr1}")
         col4.metric(f"⚡ {t2_name} CRR", f"{crr2}")
 
-        st.info(f"📢 **Match Status:** {status_msg} | 🔄 Auto-updating every 20 sec")
+        st.info(f"📢 **Match Status:** {status_msg} | 🔄 Auto-updating real-time stream (5s polling)")
         st.divider()
 
         chart_r1 = r1 if r1 > 0 else 170
