@@ -103,36 +103,37 @@ else:
 
     @st.cache_data(ttl=30)
     def fetch_realtime_matches():
-        headers = {'Cache-Control': 'no-cache'}
-        
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        # Primary API Call
         try:
             url = f"https://api.cricapi.com/v1/currentMatches?apikey={API_KEY}&offset=0"
             res = requests.get(url, headers=headers, timeout=5).json()
             if res.get("status") == "success" and res.get("data"):
                 return res.get("data")
-        except Exception as e:
-            print(f"Primary Fetch Error: {e}")
+        except Exception:
+            pass
 
+        # Fallback Score Endpoint
         try:
             url_score = f"https://api.cricapi.com/v1/cricScore?apikey={API_KEY}"
             res2 = requests.get(url_score, headers=headers, timeout=5).json()
             if res2.get("status") == "success" and res2.get("data"):
                 return res2.get("data")
-        except Exception as e:
-            print(f"Secondary Fetch Error: {e}")
+        except Exception:
+            pass
 
         return []
 
     @st.cache_data(ttl=30)
     def fetch_match_scorecard(match_id):
-        headers = {'Cache-Control': 'no-cache'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         url = f"https://api.cricapi.com/v1/match_scorecard?apikey={API_KEY}&id={match_id}"
         try:
             res = requests.get(url, headers=headers, timeout=5).json()
             if res.get("status") == "success":
                 return res.get("data", {})
-        except Exception as e:
-            print(f"Scorecard API Error: {e}")
+        except Exception:
+            pass
         return None
 
     def parse_score_str(score_str):
@@ -156,9 +157,6 @@ else:
             cumulative_runs[-1] = runs
         return overs_list, cumulative_runs
 
-    # =========================================================
-    # 📚 HISTORIC MATCHES DATABASE (6 Match Records)
-    # =========================================================
     HISTORIC_DATABASE = {
         "🏆 IPL Final 2026: RCB vs GT": {
             "t1": "Royal Challengers Bengaluru", "t2": "Gujarat Titans",
@@ -246,12 +244,11 @@ else:
         }
     }
 
-    # Sidebar Controls
     st.sidebar.title("🏏 Mayuresh's Cricket Hub")
     st.sidebar.markdown("---")
     match_source = st.sidebar.radio("📌 Select Category", ["🔴 Live Matches (Real-Time API)", "📜 Classic Match Records"])
 
-    if st.sidebar.button("🔄 Refresh API Stream"):
+    if st.sidebar.button("🔄 Force API Refresh"):
         st.cache_data.clear()
         st.rerun()
 
@@ -259,40 +256,37 @@ else:
     if "Live" not in match_source:
         selected_key = st.sidebar.selectbox("🏆 Select Historic Record", list(HISTORIC_DATABASE.keys()))
 
-    # Dynamic Auto-Refreshing Fragment (Updated to 30 Seconds)
     @st.fragment(run_every=30)
     def render_live_dashboard():
         selected_data = None
 
         if "Live" in match_source:
             matches_data = fetch_realtime_matches()
+            
+            # Debug view to see what API returns
+            with st.sidebar.expander("🛠️ API Debug Info"):
+                st.write(f"Matches Fetched: {len(matches_data)}")
+                st.json(matches_data[:2] if matches_data else {"message": "No live matches returned from API key"})
+
             active_match = None
-            
-            for m in matches_data:
-                full_text = f"{m.get('name','')} {m.get('teams','')} {m.get('matchType','')}".lower()
-                if any(k in full_text for k in ["india", "ind", "sri lanka", "sl", "test", "ipl"]):
-                    active_match = m
-                    break
-            
-            if not active_match and len(matches_data) > 0:
+            if len(matches_data) > 0:
                 active_match = matches_data[0]
 
             if active_match:
                 match_id = active_match.get("id")
                 card = fetch_match_scorecard(match_id) if match_id else None
                 
-                teams = active_match.get("teams", ["India", "Sri Lanka"])
-                t1_name = teams[0] if len(teams) > 0 else "India"
-                t2_name = teams[1] if len(teams) > 1 else "Sri Lanka"
+                teams = active_match.get("teams", ["Team A", "Team B"])
+                t1_name = teams[0] if len(teams) > 0 else "Team A"
+                t2_name = teams[1] if len(teams) > 1 else "Team B"
                 
                 score_arr = active_match.get("score", [])
-                
-                t1s = "288/2 (73.0)"
+                t1s = "Yet to bat"
                 t2s = "Yet to bat"
                 
                 if len(score_arr) > 0:
                     in1 = score_arr[0]
-                    t1s = f"{in1.get('r', 288)}/{in1.get('w', 2)} ({in1.get('o', 73.0)})"
+                    t1s = f"{in1.get('r', 0)}/{in1.get('w', 0)} ({in1.get('o', 0.0)})"
                 if len(score_arr) > 1:
                     in2 = score_arr[1]
                     t2s = f"{in2.get('r', 0)}/{in2.get('w', 0)} ({in2.get('o', 0.0)})"
@@ -311,22 +305,17 @@ else:
                                 "Balls ⏱️": b.get("b", 0),
                                 "SR ⚡": b.get("sr", 0.0)
                             })
-                
-                if not player_list:
-                    player_list = [
-                        {"Player Name 🏏": "D. Padikkal", "Status ⚾": "Batting*", "Runs 📊": 131, "Balls ⏱️": 178, "SR ⚡": 73.59},
-                        {"Player Name 🏏": "R. Pant", "Status ⚾": "Batting*", "Runs 📊": 27, "Balls ⏱️": 36, "SR ⚡": 75.00}
-                    ]
 
                 selected_data = {
                     "t1": t1_name, "t2": t2_name,
                     "t1s": t1s, "t2s": t2s,
-                    "status": active_match.get("status", "IND chose to bat - Test 1 of 2 - Day 2"),
+                    "status": active_match.get("status", "Live Match In Progress"),
                     "t1_runs": r1, "t1_wkts": w1, "t1_overs": o1,
                     "t2_runs": r2, "t2_wkts": w2, "t2_overs": o2,
-                    "player_scores": pd.DataFrame(player_list)
+                    "player_scores": pd.DataFrame(player_list) if player_list else pd.DataFrame()
                 }
             else:
+                st.warning("⚠️ CricAPI returned no live matches or quota reached. Showing default match context.")
                 selected_data = {
                     "t1": "India", "t2": "Sri Lanka",
                     "t1s": "288/2 (73.0)", "t2s": "Yet to bat",
@@ -341,14 +330,14 @@ else:
         else:
             selected_data = HISTORIC_DATABASE.get(selected_key, list(HISTORIC_DATABASE.values())[0])
 
-        t1_name = selected_data.get("t1", "India")
-        t2_name = selected_data.get("t2", "Sri Lanka")
-        t1_score = selected_data.get("t1s", "288/2 (73.0)")
+        t1_name = selected_data.get("t1", "Team 1")
+        t2_name = selected_data.get("t2", "Team 2")
+        t1_score = selected_data.get("t1s", "0/0 (0.0)")
         t2_score = selected_data.get("t2s", "Yet to bat")
         status_msg = selected_data.get("status", "Live Match")
 
-        r1 = max(int(selected_data.get("t1_runs", 288)), 0)
-        o1 = max(float(selected_data.get("t1_overs", 73.0)), 0.0)
+        r1 = max(int(selected_data.get("t1_runs", 0)), 0)
+        o1 = max(float(selected_data.get("t1_overs", 0.0)), 0.0)
         r2 = max(int(selected_data.get("t2_runs", 0)), 0)
         o2 = max(float(selected_data.get("t2_overs", 0.0)), 0.0)
 
@@ -413,16 +402,19 @@ else:
         with col_b1:
             st.subheader("👤 Batting Performance & Player Scores")
             player_df = selected_data.get("player_scores", pd.DataFrame())
-            st.dataframe(player_df, use_container_width=True, hide_index=True)
+            if not player_df.empty:
+                st.dataframe(player_df, use_container_width=True, hide_index=True)
+            else:
+                st.write("No detailed scorecard data available for this match.")
 
         with col_b2:
             st.subheader("🍩 Wickets Comparison")
-            w1 = selected_data.get("t1_wkts", 2)
+            w1 = selected_data.get("t1_wkts", 0)
             w2 = selected_data.get("t2_wkts", 0)
             
             wicket_pie = pd.DataFrame({
                 "Team": [t1_name, t2_name],
-                "Wickets": [w1, w2 if w2 > 0 else 1]
+                "Wickets": [w1 if w1 > 0 else 1, w2 if w2 > 0 else 1]
             })
             fig_donut = px.pie(wicket_pie, values='Wickets', names='Team', hole=0.5, template="plotly_dark", color_discrete_sequence=['#00d2ff', '#ff4b4b'])
             fig_donut.update_layout(height=260, margin=dict(l=20, r=20, t=20, b=20))
